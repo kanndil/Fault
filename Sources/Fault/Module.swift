@@ -35,7 +35,7 @@ struct Port: Codable {
     }
 
     var bits: [Int] {
-        from < to ? [Int](from ... to) : [Int](to ... from)
+        from < to ? [Int](from...to) : [Int](to...from)
     }
 
     init(name: String, polarity: Polarity? = nil, from: Int = 0, to: Int = 0, at ordinal: Int) {
@@ -46,7 +46,9 @@ struct Port: Codable {
         self.ordinal = ordinal
     }
 
-    static func extract(from definition: PythonObject) throws -> (ports: [String: Port], inputs: [Port], outputs: [Port]) {
+    static func extract(from definition: PythonObject) throws -> (
+        ports: [String: Port], inputs: [Port], outputs: [Port]
+    ) {
         var ports: [String: Port] = [:]
 
         var paramaters: [String: Int] = [:]
@@ -75,6 +77,10 @@ struct Port: Codable {
                 name = "\(portDeclaration.name)"
             }
 
+            if name.starts(with: "\\") {
+                name = String(name.dropFirst())
+            }
+
             let port = Port(name: name, polarity: polarity, from: from, to: to, at: i)
             ports[name] = port
         }
@@ -89,8 +95,12 @@ struct Port: Codable {
                     paramaters["\(declaration.name)"] =
                         Port.evaluate(expr: declaration.value.var, params: paramaters)
                 } else if declType == "Input" || declType == "Output" {
-                    guard var port = ports["\(declaration.name)"] else {
-                        throw "Unknown port \(declaration.name)"
+                    var name = "\(declaration.name)"
+                    if name.starts(with: "\\") {
+                        name = String(name.dropFirst())
+                    }
+                    guard var port = ports[name] else {
+                        throw "Unknown port name"
                     }
                     if declaration.width != Python.None {
                         let msb = Port.evaluate(expr: declaration.width.msb, params: paramaters)
@@ -103,15 +113,20 @@ struct Port: Codable {
                     } else {
                         port.polarity = .output
                     }
-                    ports["\(declaration.name)"] = port
+                    ports[name] = port
                 }
             }
         }
 
-        let inputs: [Port] = ports.values.filter { $0.polarity == .input }.sorted(by: { $0.ordinal < $1.ordinal })
-        let outputs: [Port] = ports.values.filter { $0.polarity == .output }.sorted(by: { $0.ordinal < $1.ordinal })
+        let inputs: [Port] = ports.values.filter { $0.polarity == .input }.sorted(by: {
+            $0.ordinal < $1.ordinal
+        })
+        let outputs: [Port] = ports.values.filter { $0.polarity == .output }.sorted(by: {
+            $0.ordinal < $1.ordinal
+        })
         if ports.count != inputs.count + outputs.count {
-            throw RuntimeError("Some ports in \(definition.name) are not properly declared as an input or output.")
+            throw RuntimeError(
+                "Some ports in \(definition.name) are not properly declared as an input or output.")
         }
 
         return (ports: ports, inputs: inputs, outputs: outputs)
@@ -122,8 +137,8 @@ struct Port: Codable {
         var value = 0
         switch type {
         case "Minus",
-             "Plus",
-             "Sll":
+            "Plus",
+            "Sll":
             let left = Port.evaluate(expr: expr.left, params: params)
             let right = Port.evaluate(expr: expr.right, params: params)
             value = Port.op[type]!(left, right)
@@ -132,7 +147,8 @@ struct Port: Codable {
         case "Identifier":
             value = params["\(expr.name)"]!
         default:
-            Stderr.print("Got unknown expression type \(type) while evaluating port expression \(expr)")
+            Stderr.print(
+                "Got unknown expression type \(type) while evaluating port expression \(expr)")
             exit(EX_DATAERR)
         }
         return value
@@ -147,7 +163,11 @@ struct Port: Codable {
 
 extension Port: CustomStringConvertible {
     var description: String {
-        "Port@\(ordinal)(\(name): \(polarity ?? .unknown)[\(from)..\(to)])"
+        var index = "[\(from):\(to)]"
+        if from == to && from == 0 {
+            index = ""
+        }
+        return "Port@\(ordinal)(\(name): \(polarity ?? .unknown))\(index)"
     }
 }
 
@@ -180,7 +200,9 @@ struct Module {
         portsByName = ports.reduce(into: [String: Port]()) { $0[$1.name] = $1 }
     }
 
-    static func getModules(in files: [String], filter filterOpt: Set<String>? = nil) throws -> OrderedDictionary<String, Module> {
+    static func getModules(in files: [String], filter filterOpt: Set<String>? = nil) throws
+        -> OrderedDictionary<String, Module>
+    {
         let parse = Python.import("pyverilog.vparser.parser").parse
         var result: OrderedDictionary<String, Module> = [:]
 
@@ -202,7 +224,8 @@ struct Module {
                     }
                 }
                 let (_, inputs, outputs) = try Port.extract(from: definition)
-                result[name] = Module(name: name, inputs: inputs, outputs: outputs, definition: definition)
+                result[name] = Module(
+                    name: name, inputs: inputs, outputs: outputs, definition: definition)
             }
         }
 

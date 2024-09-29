@@ -13,9 +13,9 @@
 // limitations under the License.
 
 import BigInt
+import Collections
 import Defile
 import Foundation
-import Collections
 
 typealias TestVector = [BigUInt]
 
@@ -24,7 +24,7 @@ extension BigUInt {
         var padded = String(self, radix: radix)
         let length = padded.count
         if digits > length {
-            for _ in 0 ..< (digits - length) {
+            for _ in 0..<(digits - length) {
                 padded = "0" + padded
             }
         }
@@ -124,19 +124,26 @@ enum TVSet {
         return (vectors: vectors, inputs: inputs)
     }
 
-    static func readFromTest(_ file: String, withInputsFrom bench: String) throws -> ([TestVector], [Port]) {
+    static func readFromTest(_ file: String, withInputsFrom bench: String) throws -> (
+        [TestVector], [Port]
+    ) {
         var inputDict: OrderedDictionary<String, Port> = [:]
         let benchStr = File.read(bench)!
-        let inputRx = #/INPUT\(([^\(\)]+?)(\[\d+\])?\)/#
+        let inputRx = #/INPUT\(([^\(\)]+?)\)/#
         var ordinal = -1
         for line in benchStr.components(separatedBy: "\n") {
             if let match = try? inputRx.firstMatch(in: line) {
                 let name = String(match.1)
-                inputDict[name] = inputDict[name] ?? Port(name: name, polarity: .input, from: 0, to: -1, at: { ordinal += 1; return ordinal }())
+                inputDict[name] = Port(
+                    name: name, polarity: .input, from: 0, to: -1,
+                    at: {
+                        ordinal += 1
+                        return ordinal
+                    }())
                 inputDict[name]!.to += 1
             }
         }
-        
+
         let inputs: [Port] = inputDict.values.sorted { $0.ordinal < $1.ordinal }
         var vectors: [TestVector] = []
         let testStr = File.read(file)!
